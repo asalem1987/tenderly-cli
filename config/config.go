@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"os/user"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/tenderly/tenderly-cli/model/actions"
 	"github.com/tenderly/tenderly-cli/userError"
 
 	"github.com/spf13/viper"
@@ -28,8 +30,8 @@ const (
 
 	OrganizationName = "org_name"
 
-	Exports = "exports"
-
+	Exports  = "exports"
+	Actions  = "actions"
 	Projects = "projects"
 )
 
@@ -336,6 +338,32 @@ func WriteExportNetwork(networkId string, network *ExportNetwork) error {
 	return WriteProjectConfig()
 }
 
+func IsAnyActionsInit() bool {
+	act := projectConfig.GetStringMap(Actions)
+	return len(act) > 0
+}
+
+func IsActionsInit(projectSlug string) bool {
+	act := projectConfig.GetStringMap(Actions)
+	_, exists := act[projectSlug]
+	return exists
+}
+
+func MustWriteActionsInit(projectSlug string, projectActions *actions.ProjectActions) {
+	act := projectConfig.GetStringMap(Actions)
+	act[projectSlug] = projectActions
+
+	projectConfig.Set(Actions, act)
+	err := WriteProjectConfig()
+	if err != nil {
+		userError.LogErrorf(
+			"write project config: %s",
+			userError.NewUserError(err, "Couldn't write project config file"),
+		)
+		os.Exit(1)
+	}
+}
+
 func SetProjectConfig(key string, value interface{}) {
 	projectConfig.Set(key, value)
 }
@@ -386,6 +414,11 @@ func WriteGlobalConfig() error {
 	}
 
 	return nil
+}
+
+// ReadProjectConfig is necessary because viper reader doesn't respect custom unmarshaler
+func ReadProjectConfig() ([]byte, error) {
+	return ioutil.ReadFile(filepath.Join(ProjectDirectory, fmt.Sprintf("%s.yaml", ProjectConfigName)))
 }
 
 func getString(key string) string {
